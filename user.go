@@ -25,26 +25,34 @@ func Authenticate(w http.ResponseWriter, r *http.Request){
 	checkErr(err)
 	defer r.Body.Close()
 	user = AuthenticateUser(user)
-	Authorize(user.Token,user.Roll)
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(user)
 }
-func Authorize(token string, roll string) bool{
+func Authorize(w http.ResponseWriter, r *http.Request){
+	decoder := json.NewDecoder(r.Body)
 	authorized := false
-	user := User {
-		Token: token,
-	}
-	user = GetUser(user)
+	var user User
+	err := decoder.Decode(&user)
+	checkErr(err)
+	defer r.Body.Close()
+	var dbUser = GetUser(user)
 	//Convert to local
-	user.Expiration = user.Expiration.Local()
+	dbUser.Expiration = dbUser.Expiration.Local()
 	//Adjust for local
-	user.Expiration = user.Expiration.Add(5*time.Hour)
-	if time.Now().Before(user.Expiration) && user.Roll == roll {
+	dbUser.Expiration = dbUser.Expiration.Add(5*time.Hour)
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	if time.Now().Before(dbUser.Expiration) && dbUser.Roll == user.Roll {
 		authorized = true
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(authorized)
+	} else {
+		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(authorized)
 	}
-	return authorized
 }
+
 func BuildUser(rows *sql.Rows) User {
 	var user User
 	for rows.Next() {
