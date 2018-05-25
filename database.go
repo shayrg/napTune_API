@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/nu7hatch/gouuid"
+	"time"
 )
 
 const dbString = "root:mysql@tcp(localhost:3306)/napTune?charset=utf8&parseTime=True"
@@ -46,16 +47,15 @@ func AuthenticateUser(loginUser User) User{
 	}
 }
 func setToken(user User) User{
+	expirationOffset := time.Hour * 2
+	expirationDate := time.Now().UTC().Add(expirationOffset)
 	user.Token = generateToken()
-	//user.Expiration = time.Now().Add(2*time.Hour).String()
 	db, err := sql.Open("mysql", dbString)
 	checkErr(err)
-	stmt, err := db.Prepare("update users set token = ?, expiration = NOW() where id = ?")
+	stmt, err := db.Prepare("update users set token = ?, expiration = ? where id = ?")
 	checkErr(err)
-	_, err = stmt.Exec(user.Token, user.Id)
+	_, err = stmt.Exec(user.Token, expirationDate.Format("2006-01-02 15:04:05"), user.Id)
 	checkErr(err)
-	_, err = db.Exec("update users set expiration = ADDTIME(expiration, '02:00:00')")
-	//checkErr(err)
 	return GetUser(user)
 }
 func generateToken() string {
