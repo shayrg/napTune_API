@@ -37,10 +37,6 @@ func Authorize(w http.ResponseWriter, r *http.Request){
 	checkErr(err)
 	defer r.Body.Close()
 	var dbUser = GetUser(user)
-	//Convert to local
-	dbUser.Expiration = dbUser.Expiration.Local()
-	//Adjust for local
-	dbUser.Expiration = dbUser.Expiration.Add(5*time.Hour)
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	if time.Now().Before(dbUser.Expiration) && dbUser.Roll == user.Roll {
 		authorized = true
