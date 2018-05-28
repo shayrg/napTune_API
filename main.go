@@ -22,6 +22,10 @@ func main(){
 		Path("/logout").
 		Name("logout").
 		HandlerFunc(http.HandlerFunc(user.Logout))
+	router.Methods("POST").
+		Path("/new_user").
+		Name("new_user").
+		HandlerFunc(http.HandlerFunc(user.NewUser))
 	//Listen and serve
 	port := "8080"
 	fmt.Println("Listening on port: " + port)

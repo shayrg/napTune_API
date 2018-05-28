@@ -23,6 +23,7 @@ type user struct {
 type authorized struct {
 	Authorized bool
 }
+const hoursOffset = 2
 
 func Authenticate(w http.ResponseWriter, r *http.Request){
 	decoder := json.NewDecoder(r.Body)
@@ -31,6 +32,7 @@ func Authenticate(w http.ResponseWriter, r *http.Request){
 	global.CheckErr(err)
 	defer r.Body.Close()
 	dbUser := authenticateUser(usr)
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	//Email must but set
 	if usr.Email != "" && dbUser.Id != ""{
 		dbUser.Password = ""
@@ -44,7 +46,6 @@ func Authenticate(w http.ResponseWriter, r *http.Request){
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(auth)
 	}
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 }
 
 func Authorize(w http.ResponseWriter, r *http.Request){
@@ -65,12 +66,11 @@ func Authorize(w http.ResponseWriter, r *http.Request){
 	if time.Now().Before(dbUser.Expiration) && dbUser.Roll == usr.Roll {
 		auth.Authorized = true
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(auth)
 	} else {
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(auth)
 	}
+	json.NewEncoder(w).Encode(auth)
+
 }
 
 func Logout(w http.ResponseWriter, r *http.Request){
@@ -82,13 +82,61 @@ func Logout(w http.ResponseWriter, r *http.Request){
 	auth := authorized{
 		Authorized: false,
 	}
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	if logoutUser(usr) {
 		w.WriteHeader(http.StatusOK)
 	} else {
 		w.WriteHeader(http.StatusForbidden)
 	}
 	json.NewEncoder(w).Encode(auth)
+}
 
+func NewUser(w http.ResponseWriter, r *http.Request){
+	decoder := json.NewDecoder(r.Body)
+	var usr user
+	err := decoder.Decode(&usr)
+	global.CheckErr(err)
+	defer r.Body.Close()
+	success := false
+	//Check email, name, and password are set
+	if usr.Email != "" && usr.Password != "" && usr.FirstName != "" && usr.LastName != "" {
+		//Check email is not used
+		usr.Token = ""
+		dbUser := getUser(usr)
+		if dbUser.Id == "" {
+			success = true
+		}
+	}
+	if success {
+		//Add user to database
+		db, err := sql.Open("mysql", global.DbString)
+		global.CheckErr(err)
+		stmt, err := db.Prepare("insert into users (" +
+			"firstName, lastName, email, password, role, expiration) values (?,?,?,?,?,?)")
+		global.CheckErr(err)
+		_, err = stmt.Exec(usr.FirstName, usr.LastName, usr.Email, usr.Password, "user",
+			time.Now().UTC().UTC().Format("2006-01-02 15:04:05"))
+		global.CheckErr(err)
+		db.Close()
+		usr = getUser(usr)
+		usr = setToken(usr, hoursOffset)
+		if usr.Token == "" {
+			success = false
+		}
+	}
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	if success {
+		w.WriteHeader(http.StatusOK)
+		usr.Id = "-1"
+		usr.Password = ""
+		json.NewEncoder(w).Encode(usr)
+	} else {
+		auth := authorized{
+			Authorized: false,
+		}
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(auth)
+	}
 }
 
 func buildUser(rows *sql.Rows) user {
@@ -151,7 +199,7 @@ func getUser(usr user) user {
 func authenticateUser(loginUser user) user{
 	dbUser := getUser(loginUser)
 	if loginUser.Password == dbUser.Password {
-		return setToken(dbUser, 2)
+		return setToken(dbUser, hoursOffset)
 	} else {
 		return user{}
 	}
@@ -181,6 +229,7 @@ func setToken(usr user, offset int) user{
 	global.CheckErr(err)
 	_, err = stmt.Exec(usr.Token, expirationDate, usr.Id)
 	global.CheckErr(err)
+	db.Close()
 	return getUser(usr)
 }
 

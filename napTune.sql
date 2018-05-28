@@ -8,7 +8,7 @@ create table users(
 	,lastName varchar(20) not null
 	,email varchar(20) not null
 	,password varchar(20) not null
-	,token varchar(50)
+	,token varchar(50) not null DEFAULT ""
 	,expiration datetime
 	,role varchar(20) not null
 );
