@@ -10,7 +10,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-type User struct {
+type user struct {
 	Id			string `json:"id"`
 	FirstName 	string `json:"first_name"`
 	LastName 	string `json:"last_name"`
@@ -20,40 +20,79 @@ type User struct {
 	Expiration	time.Time  `json:"expiration"`
 	Roll 		string `json:"roll"`
 }
+type authorized struct {
+	Authorized bool
+}
 
 func Authenticate(w http.ResponseWriter, r *http.Request){
 	decoder := json.NewDecoder(r.Body)
-	var user User
-	err := decoder.Decode(&user)
+	var usr user
+	err := decoder.Decode(&usr)
 	global.CheckErr(err)
 	defer r.Body.Close()
-	user = authenticateUser(user)
+	dbUser := authenticateUser(usr)
+	//Email must but set
+	if usr.Email != "" && dbUser.Id != ""{
+		dbUser.Password = ""
+		dbUser.Id = "-1"
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(dbUser)
+	} else {
+		auth := authorized{
+			Authorized: false,
+		}
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(auth)
+	}
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(user)
 }
+
 func Authorize(w http.ResponseWriter, r *http.Request){
 	decoder := json.NewDecoder(r.Body)
-	authorized := false
-	var user User
-	err := decoder.Decode(&user)
+	auth := authorized{
+		Authorized: false,
+	}
+	var usr user
+	var dbUser user
+	err := decoder.Decode(&usr)
 	global.CheckErr(err)
 	defer r.Body.Close()
-	var dbUser = getUser(user)
+	//Token must be set
+	if usr.Token != "" {
+		dbUser = getUser(usr)
+	}
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	if time.Now().Before(dbUser.Expiration) && dbUser.Roll == user.Roll {
-		authorized = true
+	if time.Now().Before(dbUser.Expiration) && dbUser.Roll == usr.Roll {
+		auth.Authorized = true
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(authorized)
+		json.NewEncoder(w).Encode(auth)
 	} else {
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(authorized)
+		json.NewEncoder(w).Encode(auth)
 	}
 }
 
-func buildUser(rows *sql.Rows) User {
-	var user User
+func Logout(w http.ResponseWriter, r *http.Request){
+	decoder := json.NewDecoder(r.Body)
+	var usr user
+	err := decoder.Decode(&usr)
+	global.CheckErr(err)
+	defer r.Body.Close()
+	auth := authorized{
+		Authorized: false,
+	}
+	if logoutUser(usr) {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusForbidden)
+	}
+	json.NewEncoder(w).Encode(auth)
+
+}
+
+func buildUser(rows *sql.Rows) user {
+	var usr user
 	for rows.Next() {
 		var id			string
 		var firstName 	string
@@ -65,7 +104,7 @@ func buildUser(rows *sql.Rows) User {
 		var roll 		string
 		err := rows.Scan(&id, &firstName, &lastName, &email, &password, &token, &expiration, &roll)
 		global.CheckErr(err)
-		user = User {
+		usr = user {
 			Id: id,
 			FirstName: firstName,
 			LastName: lastName,
@@ -76,24 +115,24 @@ func buildUser(rows *sql.Rows) User {
 			Roll: roll,
 		}
 	}
-	return user
+	return usr
 }
 
-func getUser(user User) User {
+func getUser(usr user) user {
 	var selectStatement string
 	var selectValue string
 	//Token
-	if user.Token != "" {
+	if usr.Token != "" {
 		selectStatement = "token"
-		selectValue = user.Token
+		selectValue = usr.Token
 		//Id
-	} else if user.Id != "" {
+	} else if usr.Id != "" {
 		selectStatement = "id"
-		selectValue = user.Id
+		selectValue = usr.Id
 		//Email
-	} else if user.Email != "" {
+	} else if usr.Email != "" {
 		selectStatement = "email"
-		selectValue = user.Email
+		selectValue = usr.Email
 		//Fail case
 	} else {
 		selectStatement = "id"
@@ -108,26 +147,43 @@ func getUser(user User) User {
 	db.Close()
 	return buildUser(rows)
 }
-func authenticateUser(loginUser User) User{
+
+func authenticateUser(loginUser user) user{
 	dbUser := getUser(loginUser)
 	if loginUser.Password == dbUser.Password {
-		return setToken(dbUser)
+		return setToken(dbUser, 2)
 	} else {
-		return User{}
+		return user{}
 	}
 }
-func setToken(user User) User{
-	expirationOffset := time.Hour * 2
+
+func logoutUser(usr user) bool{
+	success := false
+	//Token must be set
+	if usr.Token != "" {
+		dbUser := getUser(usr)
+		dbUser = setToken(dbUser,0)
+		//If expiration is in the past
+		if time.Now().After(dbUser.Expiration) && dbUser.Id != "" {
+			success = true
+		}
+	}
+	return success
+}
+
+func setToken(usr user, offset int) user{
+	expirationOffset := time.Duration(offset) * time.Hour
 	expirationDate := time.Now().UTC().Add(expirationOffset).Format("2006-01-02 15:04:05")
-	user.Token = generateToken()
+	usr.Token = generateToken()
 	db, err := sql.Open("mysql", global.DbString)
 	global.CheckErr(err)
 	stmt, err := db.Prepare("update users set token = ?, expiration = ? where id = ?")
 	global.CheckErr(err)
-	_, err = stmt.Exec(user.Token, expirationDate, user.Id)
+	_, err = stmt.Exec(usr.Token, expirationDate, usr.Id)
 	global.CheckErr(err)
-	return getUser(user)
+	return getUser(usr)
 }
+
 func generateToken() string {
 	token, err := uuid.NewV4()
 	global.CheckErr(err)
