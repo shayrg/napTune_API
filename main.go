@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"fmt"
 	"log"
+	"github.com/shayrg/napTune_API/user"
 )
 
 func main(){
@@ -12,11 +13,11 @@ func main(){
 	router.Methods("POST").
 		Path("/authenticate").
 		Name("authenticate").
-		Handler(http.HandlerFunc(Authenticate))
+		Handler(http.HandlerFunc(user.Authenticate))
 	router.Methods("POST").
 		Path("/authorize").
 		Name("authorize").
-		HandlerFunc(http.HandlerFunc(Authorize))
+		HandlerFunc(http.HandlerFunc(user.Authorize))
 	//Listen and serve
 	port := "8080"
 	fmt.Println("Listening on port: " + port)
