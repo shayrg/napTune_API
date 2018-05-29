@@ -37,22 +37,32 @@ insert into users(
 	"password",
 	now()
 );
+insert into people (
+	firstName,
+	lastName,
+	roll
+) values (
+	"Song",
+	"Writer",
+	"artist"
+);
 -- Songs
--- create table songs (
--- 	id int primary key auto_increment
--- 	,name VARCHAR(20) not NULL
--- 	,artistId int not NULL
--- 	,length TIME not null
--- 	,location VARCHAR(20)
--- );
--- insert into songs (
--- 	name,
--- 	artistId,
--- 	length,
--- 	location
--- ) VALUES (
--- 		"test song"
--- 		,1
--- 		,00:03:00
--- 		,"/location/test_song.mp3"
--- )
+create table songs(
+	id int primary key auto_increment,
+	name VARCHAR(20) not NULL,
+	artistId int not NULL,
+	length VARCHAR(20) not null,
+	location VARCHAR(40),
+	foreign key (artistId) references people(id)
+);
+insert into songs (
+	name,
+	artistId,
+	length,
+	location
+) VALUES (
+		"test song",
+		last_insert_id(),
+		"03:12",
+		"test_song.mp3"
+);
