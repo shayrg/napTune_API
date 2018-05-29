@@ -1,4 +1,4 @@
-package user
+package people
 
 import (
 	"net/http"
@@ -111,10 +111,15 @@ func NewUser(w http.ResponseWriter, r *http.Request){
 		//Add user to database
 		db, err := sql.Open("mysql", global.DbString)
 		global.CheckErr(err)
-		stmt, err := db.Prepare("insert into users (" +
-			"firstName, lastName, email, password, role, expiration) values (?,?,?,?,?,?)")
+		stmt, err := db.Prepare("INSERT into people (firstName, lastName, roll) VALUES (?,?,?)")
 		global.CheckErr(err)
-		_, err = stmt.Exec(usr.FirstName, usr.LastName, usr.Email, usr.Password, "user",
+		result, err := stmt.Exec(usr.FirstName, usr.LastName, "user")
+		global.CheckErr(err)
+		lastInsertId, err := result.LastInsertId()
+		global.CheckErr(err)
+		stmt, err = db.Prepare("INSERT into users (id, email, password, expiration) VALUES (?,?,?,?)")
+		global.CheckErr(err)
+		_, err = stmt.Exec(lastInsertId, usr.Email, usr.Password,
 			time.Now().UTC().UTC().Format("2006-01-02 15:04:05"))
 		global.CheckErr(err)
 		db.Close()
@@ -188,7 +193,8 @@ func getUser(usr user) user {
 	}
 	db, err := sql.Open("mysql", global.DbString)
 	global.CheckErr(err)
-	stmt, err := db.Prepare("select * from users where " + selectStatement + " = ?")
+	stmt, err := db.Prepare("select users.id, firstName, lastName, email, password," +
+		"token, expiration, roll from users join people on users.id where " + selectStatement + " = ?")
 	global.CheckErr(err)
 	rows, err := stmt.Query(selectValue)
 	global.CheckErr(err)
