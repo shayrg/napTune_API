@@ -201,7 +201,7 @@ func getUser(usr user) user {
 	db.Close()
 	return buildUser(rows)
 }
-
+//Refactor
 func authenticateUser(loginUser user) user{
 	dbUser := getUser(loginUser)
 	if loginUser.Password == dbUser.Password {
@@ -210,7 +210,7 @@ func authenticateUser(loginUser user) user{
 		return user{}
 	}
 }
-
+//Refactor
 func logoutUser(usr user) bool{
 	success := false
 	//Token must be set
@@ -228,7 +228,9 @@ func logoutUser(usr user) bool{
 func setToken(usr user, offset int) user{
 	expirationOffset := time.Duration(offset) * time.Hour
 	expirationDate := time.Now().UTC().Add(expirationOffset).Format("2006-01-02 15:04:05")
-	usr.Token = generateToken()
+	token, err := uuid.NewV4()
+	global.CheckErr(err)
+	usr.Token = token.String()
 	db, err := sql.Open("mysql", global.DbString)
 	global.CheckErr(err)
 	stmt, err := db.Prepare("update users set token = ?, expiration = ? where id = ?")
@@ -237,10 +239,4 @@ func setToken(usr user, offset int) user{
 	global.CheckErr(err)
 	db.Close()
 	return getUser(usr)
-}
-
-func generateToken() string {
-	token, err := uuid.NewV4()
-	global.CheckErr(err)
-	return token.String()
 }
