@@ -7,6 +7,7 @@ import (
 	"log"
 	"github.com/shayrg/napTune_API/people"
 	"github.com/shayrg/napTune_API/songs"
+	"github.com/shayrg/napTune_API/playlist"
 )
 
 func main(){
@@ -47,6 +48,18 @@ func main(){
 		Path("/songs/{songId}").
 		Name("songsById").
 		HandlerFunc(http.HandlerFunc(songs.GetSongById))
+	router.Methods("GET").
+		Path("/playlists").
+		Name("playlists").
+		HandlerFunc(http.HandlerFunc(playlist.GetAllPlaylists))
+	router.Methods("GET").
+		Path("/playlists/{playlistId}").
+		Name("playlistById").
+		HandlerFunc(http.HandlerFunc(playlist.GetPlaylistsById))
+	router.Methods("GET").
+		Path("/playlists/{playlistId}/songs").
+		Name("getSongsById").
+		HandlerFunc(http.HandlerFunc(playlist.GetPlaylistSongs))
 	//Listen and serve
 	port := "8080"
 	fmt.Println("Listening on port: " + port)
